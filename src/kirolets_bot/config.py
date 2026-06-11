@@ -14,6 +14,7 @@ class Settings:
     github_repository_url: str
     github_token: str
     github_base_branch: str
+    git_cache_dir: str
     kiro_api_key: str
     kiro_trust_tools: str
     progress_update_interval_seconds: int
@@ -55,6 +56,7 @@ def load_settings() -> Settings:
         github_repository_url=_required_env("GITHUB_REPOSITORY_URL"),
         github_token=_required_env("GITHUB_TOKEN"),
         github_base_branch=os.getenv("GITHUB_BASE_BRANCH", "main").strip() or "main",
+        git_cache_dir=os.getenv("GIT_CACHE_DIR", "").strip() or ".kirolets/git-cache",
         kiro_api_key=_required_env("KIRO_API_KEY"),
         kiro_trust_tools=os.getenv("KIRO_TRUST_TOOLS", "read,grep,write,bash").strip()
         or "read,grep,write,bash",
