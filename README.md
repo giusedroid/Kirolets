@@ -1,5 +1,7 @@
 # Kirolets Telegram Bot
 
+![Kirolets banner](assets/kirolets-banner.png)
+
 Kirolets lets Kiro users ask for code changes from Telegram.
 
 The long-term idea is simple: give Kiro users a lightweight interface they can use from
