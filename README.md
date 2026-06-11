@@ -53,8 +53,8 @@ For each text message or voice note, the bot:
 
 1. Transcribes voice notes through S3 and Amazon Transcribe with speaker diarization enabled for up to 10 speakers.
 2. Uses text messages directly when no transcription is needed.
-3. Clones the configured GitHub repository into a temporary workspace.
-4. Creates a new branch for the Telegram request.
+3. Updates a local bare Git cache for the configured GitHub repository.
+4. Creates a temporary worktree and branch for the Telegram request.
 5. Runs Kiro CLI in headless mode with the message or transcript as the prompt.
 6. Commits any generated changes, pushes the branch, opens a GitHub PR, and sends the PR link back to Telegram.
 
@@ -75,6 +75,7 @@ AWS_TRANSCRIBE_LANGUAGE_CODE=en-US
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
 GITHUB_BASE_BRANCH=main
+GIT_CACHE_DIR=.kirolets/git-cache
 
 KIRO_API_KEY=
 KIRO_TRUST_TOOLS=read,grep,write,bash
@@ -87,6 +88,15 @@ KIRO_TIMEOUT_SECONDS=1800
 
 Use narrowly scoped `KIRO_TRUST_TOOLS` values where possible. Kiro's docs recommend
 specific tool categories over trusting every tool, which matches the bot's default.
+
+## Git Workspace Strategy
+
+Kirolets keeps a bare Git repository cache under `GIT_CACHE_DIR` instead of cloning the
+whole repository from GitHub for every request. Each Telegram request fetches the latest
+refs into that cache, creates a temporary linked worktree, lets Kiro edit files there,
+then removes the worktree after pushing the PR branch.
+
+This keeps each request isolated while avoiding repeated full repository downloads.
 
 ## Run
 

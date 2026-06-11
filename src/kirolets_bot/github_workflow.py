@@ -1,12 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import hashlib
 import json
 import os
 import re
 import tempfile
 from urllib.error import HTTPError
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from kirolets_bot.config import Settings
@@ -25,6 +26,8 @@ class GitHubWorkflowError(RuntimeError):
 
 
 class GitHubWorkflow:
+    _cache_locks: dict[str, asyncio.Lock] = {}
+
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
@@ -32,33 +35,110 @@ class GitHubWorkflow:
         async with _temporary_directory() as workspace:
             repo_dir = os.path.join(workspace, "repo")
             branch_name = self._branch_name(user_label)
+            bare_repo_dir = await self._prepare_bare_repo_cache()
 
-            await self._git("clone", self._authenticated_repo_url(), repo_dir, cwd=workspace)
-            await self._git("checkout", self._settings.github_base_branch, cwd=repo_dir)
-            await self._git("checkout", "-b", branch_name, cwd=repo_dir)
+            await self._git(
+                "--git-dir",
+                bare_repo_dir,
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
+                repo_dir,
+                f"origin/{self._settings.github_base_branch}",
+                cwd=workspace,
+            )
 
-            kiro_output = await self._run_kiro(repo_dir, request_text)
-            changed = await self._has_changes(repo_dir)
+            try:
+                kiro_output = await self._run_kiro(repo_dir, request_text)
+                changed = await self._has_changes(repo_dir)
 
-            if not changed:
+                if not changed:
+                    return PullRequestResult(
+                        branch_name=branch_name,
+                        pr_url=None,
+                        changed=False,
+                        summary=self._summarize_output(kiro_output),
+                    )
+
+                await self._git("add", "-A", cwd=repo_dir)
+                await self._git("commit", "-m", self._commit_message(request_text), cwd=repo_dir)
+                await self._git_authenticated("push", "-u", "origin", branch_name, cwd=repo_dir)
+                pr_url = await self._create_pull_request(branch_name, request_text, kiro_output)
+
                 return PullRequestResult(
                     branch_name=branch_name,
-                    pr_url=None,
-                    changed=False,
+                    pr_url=pr_url,
+                    changed=True,
                     summary=self._summarize_output(kiro_output),
                 )
+            finally:
+                await self._remove_worktree(bare_repo_dir, repo_dir)
 
-            await self._git("add", "-A", cwd=repo_dir)
-            await self._git("commit", "-m", self._commit_message(request_text), cwd=repo_dir)
-            await self._git("push", "-u", "origin", branch_name, cwd=repo_dir)
-            pr_url = await self._create_pull_request(branch_name, request_text, kiro_output)
+    async def _prepare_bare_repo_cache(self) -> str:
+        os.makedirs(self._settings.git_cache_dir, exist_ok=True)
+        bare_repo_dir = self._bare_repo_dir()
+        lock = self._cache_locks.setdefault(bare_repo_dir, asyncio.Lock())
 
-            return PullRequestResult(
-                branch_name=branch_name,
-                pr_url=pr_url,
-                changed=True,
-                summary=self._summarize_output(kiro_output),
-            )
+        async with lock:
+            if os.path.exists(bare_repo_dir):
+                await self._git(
+                    "--git-dir",
+                    bare_repo_dir,
+                    "remote",
+                    "set-url",
+                    "origin",
+                    self._settings.github_repository_url,
+                    cwd=self._settings.git_cache_dir,
+                )
+                await self._git_authenticated(
+                    "--git-dir",
+                    bare_repo_dir,
+                    "fetch",
+                    "origin",
+                    "--prune",
+                    cwd=bare_repo_dir,
+                )
+                await self._git("--git-dir", bare_repo_dir, "worktree", "prune", cwd=bare_repo_dir)
+            else:
+                await self._git_authenticated(
+                    "clone",
+                    "--bare",
+                    self._settings.github_repository_url,
+                    bare_repo_dir,
+                    cwd=self._settings.git_cache_dir,
+                )
+
+        return bare_repo_dir
+
+    async def _remove_worktree(self, bare_repo_dir: str, repo_dir: str) -> None:
+        await self._best_effort_git(
+            "--git-dir",
+            bare_repo_dir,
+            "worktree",
+            "remove",
+            "--force",
+            repo_dir,
+            cwd=os.path.dirname(repo_dir),
+        )
+        await self._best_effort_git(
+            "--git-dir",
+            bare_repo_dir,
+            "worktree",
+            "prune",
+            cwd=os.path.dirname(repo_dir),
+        )
+
+    async def _best_effort_git(self, *args: str, cwd: str) -> None:
+        try:
+            await self._git(*args, cwd=cwd)
+        except GitHubWorkflowError:
+            return
+
+    def _bare_repo_dir(self) -> str:
+        owner, repo = self._repository_owner_and_name()
+        digest = hashlib.sha256(self._settings.github_repository_url.encode("utf-8")).hexdigest()[:12]
+        return os.path.abspath(os.path.join(self._settings.git_cache_dir, f"{owner}-{repo}-{digest}.git"))
 
     async def _run_kiro(self, repo_dir: str, request_text: str) -> str:
         env = os.environ.copy()
@@ -81,6 +161,16 @@ class GitHubWorkflow:
 
     async def _git(self, *args: str, cwd: str) -> str:
         return await self._run_command("git", *args, cwd=cwd, timeout=300)
+
+    async def _git_authenticated(self, *args: str, cwd: str) -> str:
+        return await self._run_command(
+            "git",
+            "-c",
+            f"http.extraheader=AUTHORIZATION: Bearer {self._settings.github_token}",
+            *args,
+            cwd=cwd,
+            timeout=300,
+        )
 
     async def _run_command(
         self,
@@ -146,16 +236,11 @@ class GitHubWorkflow:
         with urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def _authenticated_repo_url(self) -> str:
+    def _repository_owner_and_name(self) -> tuple[str, str]:
         parsed = urlparse(self._settings.github_repository_url)
         if parsed.scheme != "https":
             raise GitHubWorkflowError("GITHUB_REPOSITORY_URL must be an HTTPS GitHub URL.")
 
-        token = quote(self._settings.github_token, safe="")
-        return parsed._replace(netloc=f"x-access-token:{token}@{parsed.netloc}").geturl()
-
-    def _repository_owner_and_name(self) -> tuple[str, str]:
-        parsed = urlparse(self._settings.github_repository_url)
         path_parts = parsed.path.strip("/").removesuffix(".git").split("/")
         if len(path_parts) != 2:
             raise GitHubWorkflowError("GITHUB_REPOSITORY_URL must look like https://github.com/owner/repo.git")

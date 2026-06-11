@@ -21,6 +21,7 @@ def test_load_settings_reads_required_token(monkeypatch):
         github_repository_url="https://github.com/example/repo.git",
         github_token="github-token",
         github_base_branch="main",
+        git_cache_dir=".kirolets/git-cache",
         kiro_api_key="kiro-token",
         kiro_trust_tools="read,grep,write,bash",
         progress_update_interval_seconds=30,
