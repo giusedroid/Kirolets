@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 kirolets-bot = "kirolets_bot.main:main"
+kirolets-worker = "kirolets_bot.worker:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
