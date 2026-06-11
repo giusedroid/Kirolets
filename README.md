@@ -102,6 +102,11 @@ Kirolets processes long-running transcription and Kiro jobs in the background. T
 worker concurrency is `1`, which means requests are handled one at a time in FIFO order.
 Increase `QUEUE_WORKER_CONCURRENCY` later when the workflow is ready for parallel Kiro runs.
 
+Kirolets is split into two process roles:
+
+- `kirolets-bot` receives Telegram updates and enqueues jobs.
+- `kirolets-worker` consumes Redis jobs, runs transcription/Kiro/GitHub work, and sends progress replies.
+
 ## Git Workspace Strategy
 
 Kirolets keeps a bare Git repository cache under `GIT_CACHE_DIR` instead of cloning the
@@ -117,7 +122,13 @@ This keeps each request isolated while avoiding repeated full repository downloa
 uv run kirolets-bot
 ```
 
-During development you can also run:
+Run a worker in a second process:
+
+```powershell
+uv run kirolets-worker
+```
+
+During development you can also run the bot module directly:
 
 ```powershell
 uv run python -m kirolets_bot

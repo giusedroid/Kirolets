@@ -2,9 +2,9 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from telegram.ext import Application
+from telegram import Bot
 
-from kirolets_bot.config import Settings
+from kirolets_bot.config import Settings, load_settings
 from kirolets_bot.github_workflow import GitHubWorkflow, GitHubWorkflowError
 from kirolets_bot.job_queue import QueuedJob, RedisJobQueue
 from kirolets_bot.progress import progress_updates
@@ -19,30 +19,37 @@ logger = logging.getLogger(__name__)
 SendMessage = Callable[[str], Awaitable[None]]
 
 
-async def start_workers(application: Application) -> None:
-    settings: Settings = application.bot_data["settings"]
+def main() -> None:
+    settings = load_settings()
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        level=settings.log_level,
+    )
+    asyncio.run(run_workers(settings))
+
+
+async def run_workers(settings: Settings) -> None:
     queue = RedisJobQueue(settings)
-    application.bot_data["job_queue"] = queue
-    application.bot_data["worker_tasks"] = [
-        asyncio.create_task(_worker_loop(application, queue, worker_id))
-        for worker_id in range(settings.queue_worker_concurrency)
-    ]
+    bot = Bot(settings.telegram_bot_token)
+    tasks: list[asyncio.Task] = []
+    try:
+        async with bot:
+            tasks = [
+                asyncio.create_task(_worker_loop(bot, settings, queue, worker_id))
+                for worker_id in range(settings.queue_worker_concurrency)
+            ]
+            await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            task.cancel()
 
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-async def stop_workers(application: Application) -> None:
-    tasks: list[asyncio.Task] = application.bot_data.get("worker_tasks", [])
-    for task in tasks:
-        task.cancel()
-
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-    queue: RedisJobQueue | None = application.bot_data.get("job_queue")
-    if queue is not None:
         await queue.close()
 
 
-async def _worker_loop(application: Application, queue: RedisJobQueue, worker_id: int) -> None:
+async def _worker_loop(bot: Bot, settings: Settings, queue: RedisJobQueue, worker_id: int) -> None:
     logger.info("Starting queue worker %s", worker_id)
     while True:
         job = await queue.dequeue()
@@ -50,23 +57,21 @@ async def _worker_loop(application: Application, queue: RedisJobQueue, worker_id
             continue
 
         try:
-            await process_job(application, job)
+            await process_job(bot, settings, job)
         except Exception:
             logger.exception("Unhandled error while processing queued job %s", job.id)
-            await application.bot.send_message(
+            await bot.send_message(
                 chat_id=job.chat_id,
                 text="I hit an unexpected error while processing this request.",
             )
 
 
-async def process_job(application: Application, job: QueuedJob) -> None:
-    settings: Settings = application.bot_data["settings"]
-
+async def process_job(bot: Bot, settings: Settings, job: QueuedJob) -> None:
     async def send_message(message: str) -> None:
-        await application.bot.send_message(chat_id=job.chat_id, text=message)
+        await bot.send_message(chat_id=job.chat_id, text=message)
 
     try:
-        request_text = await _job_to_request_text(application, job, settings, send_message)
+        request_text = await _job_to_request_text(bot, job, settings, send_message)
         if not request_text:
             await send_message("Send me a text message or a voice note with the task for Kiro.")
             return
@@ -89,7 +94,7 @@ async def process_job(application: Application, job: QueuedJob) -> None:
 
 
 async def _job_to_request_text(
-    application: Application,
+    bot: Bot,
     job: QueuedJob,
     settings: Settings,
     send_message: SendMessage,
@@ -101,7 +106,7 @@ async def _job_to_request_text(
         return ""
 
     await send_message("Received the voice note. Downloading it now.")
-    telegram_file = await application.bot.get_file(job.voice_file_id)
+    telegram_file = await bot.get_file(job.voice_file_id)
     audio_bytes = bytes(await telegram_file.download_as_bytearray())
 
     await send_message("Uploading the voice note to S3 and starting transcription.")

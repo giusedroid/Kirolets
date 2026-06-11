@@ -4,7 +4,18 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from kirolets_bot.config import load_settings
 from kirolets_bot.handlers import help_command, process_message, start
-from kirolets_bot.worker import start_workers, stop_workers
+from kirolets_bot.job_queue import RedisJobQueue
+
+
+async def start_queue(application: Application) -> None:
+    settings = application.bot_data["settings"]
+    application.bot_data["job_queue"] = RedisJobQueue(settings)
+
+
+async def stop_queue(application: Application) -> None:
+    queue: RedisJobQueue | None = application.bot_data.get("job_queue")
+    if queue is not None:
+        await queue.close()
 
 
 def build_application() -> Application:
@@ -17,8 +28,8 @@ def build_application() -> Application:
     application = (
         Application.builder()
         .token(settings.telegram_bot_token)
-        .post_init(start_workers)
-        .post_shutdown(stop_workers)
+        .post_init(start_queue)
+        .post_shutdown(stop_queue)
         .build()
     )
     application.bot_data["settings"] = settings
