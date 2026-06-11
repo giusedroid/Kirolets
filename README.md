@@ -142,13 +142,21 @@ uv export --format requirements-txt --no-dev --no-hashes --output-file requireme
 
 ```powershell
 docker build -t kirolets-bot .
-docker run --env-file .env kirolets-bot
+docker run --env-file .env --env REDIS_URL=redis://host.docker.internal:6379/0 kirolets-bot
 ```
 
 The Docker image includes `git` and installs `kiro-cli` using Kiro's documented installer:
 
 ```bash
 curl -fsSL https://cli.kiro.dev/install | bash
+```
+
+The app image does not run Redis itself. The Python Redis client is installed through
+`uv sync --locked --no-dev`, and Redis should run as a separate service. For local
+container usage:
+
+```powershell
+docker compose up --build
 ```
 
 ## Project Layout
