@@ -56,7 +56,9 @@ For each text message or voice note, the bot:
 3. Updates a local bare Git cache for the configured GitHub repository.
 4. Creates a temporary worktree and branch for the Telegram request.
 5. Runs Kiro CLI in headless mode with the message or transcript as the prompt.
-6. Commits any generated changes, pushes the branch, opens a GitHub PR, and sends the PR link back to Telegram.
+6. Commits any generated changes.
+7. Invokes Kiro again with the original request, commit log, and diff stat to draft the PR title and description.
+8. Pushes the branch, opens a GitHub PR, and sends the PR link back to Telegram.
 
 Long-running transcription and Kiro stages send progress updates back to the chat.
 
