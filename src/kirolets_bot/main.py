@@ -4,6 +4,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from kirolets_bot.config import load_settings
 from kirolets_bot.handlers import help_command, process_message, start
+from kirolets_bot.worker import start_workers, stop_workers
 
 
 def build_application() -> Application:
@@ -13,7 +14,13 @@ def build_application() -> Application:
         level=settings.log_level,
     )
 
-    application = Application.builder().token(settings.telegram_bot_token).build()
+    application = (
+        Application.builder()
+        .token(settings.telegram_bot_token)
+        .post_init(start_workers)
+        .post_shutdown(stop_workers)
+        .build()
+    )
     application.bot_data["settings"] = settings
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))

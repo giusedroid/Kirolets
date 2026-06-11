@@ -18,6 +18,9 @@ class Settings:
     kiro_api_key: str
     kiro_trust_tools: str
     progress_update_interval_seconds: int
+    redis_url: str
+    redis_queue_name: str
+    queue_worker_concurrency: int
     transcribe_poll_interval_seconds: int
     transcribe_timeout_seconds: int
     kiro_timeout_seconds: int
@@ -61,6 +64,10 @@ def load_settings() -> Settings:
         kiro_trust_tools=os.getenv("KIRO_TRUST_TOOLS", "read,grep,write,bash").strip()
         or "read,grep,write,bash",
         progress_update_interval_seconds=_int_env("PROGRESS_UPDATE_INTERVAL_SECONDS", 30),
+        redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0").strip()
+        or "redis://localhost:6379/0",
+        redis_queue_name=os.getenv("REDIS_QUEUE_NAME", "kirolets:jobs").strip() or "kirolets:jobs",
+        queue_worker_concurrency=_int_env("QUEUE_WORKER_CONCURRENCY", 1),
         transcribe_poll_interval_seconds=_int_env("TRANSCRIBE_POLL_INTERVAL_SECONDS", 5),
         transcribe_timeout_seconds=_int_env("TRANSCRIBE_TIMEOUT_SECONDS", 900),
         kiro_timeout_seconds=_int_env("KIRO_TIMEOUT_SECONDS", 1800),
