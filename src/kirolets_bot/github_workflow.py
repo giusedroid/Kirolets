@@ -21,6 +21,12 @@ class PullRequestResult:
     summary: str
 
 
+@dataclass(frozen=True)
+class PullRequestDescription:
+    title: str
+    body: str
+
+
 class GitHubWorkflowError(RuntimeError):
     pass
 
@@ -63,8 +69,14 @@ class GitHubWorkflow:
 
                 await self._git("add", "-A", cwd=repo_dir)
                 await self._git("commit", "-m", self._commit_message(request_text), cwd=repo_dir)
+                pr_description = await self._generate_pull_request_description(
+                    repo_dir,
+                    branch_name,
+                    request_text,
+                    kiro_output,
+                )
                 await self._git_authenticated("push", "-u", "origin", branch_name, cwd=repo_dir)
-                pr_url = await self._create_pull_request(branch_name, request_text, kiro_output)
+                pr_url = await self._create_pull_request(branch_name, pr_description)
 
                 return PullRequestResult(
                     branch_name=branch_name,
@@ -141,6 +153,9 @@ class GitHubWorkflow:
         return os.path.abspath(os.path.join(self._settings.git_cache_dir, f"{owner}-{repo}-{digest}.git"))
 
     async def _run_kiro(self, repo_dir: str, request_text: str) -> str:
+        return await self._run_kiro_prompt(repo_dir, request_text)
+
+    async def _run_kiro_prompt(self, repo_dir: str, prompt: str) -> str:
         env = os.environ.copy()
         env["KIRO_API_KEY"] = self._settings.kiro_api_key
 
@@ -149,11 +164,41 @@ class GitHubWorkflow:
             "chat",
             "--no-interactive",
             f"--trust-tools={self._settings.kiro_trust_tools}",
-            request_text,
+            prompt,
             cwd=repo_dir,
             env=env,
             timeout=self._settings.kiro_timeout_seconds,
         )
+
+    async def _generate_pull_request_description(
+        self,
+        repo_dir: str,
+        branch_name: str,
+        request_text: str,
+        kiro_output: str,
+    ) -> PullRequestDescription:
+        git_log = await self._git(
+            "log",
+            "--oneline",
+            f"origin/{self._settings.github_base_branch}..HEAD",
+            cwd=repo_dir,
+        )
+        git_diff = await self._git(
+            "diff",
+            "--stat",
+            f"origin/{self._settings.github_base_branch}..HEAD",
+            cwd=repo_dir,
+        )
+        prompt = self._pr_description_prompt(request_text, git_log, git_diff, kiro_output)
+
+        try:
+            kiro_description = await self._run_kiro_prompt(repo_dir, prompt)
+            return self._parse_pull_request_description(kiro_description)
+        except GitHubWorkflowError:
+            return PullRequestDescription(
+                title=self._pr_title(request_text),
+                body=self._pr_body(request_text, branch_name, kiro_output),
+            )
 
     async def _has_changes(self, repo_dir: str) -> bool:
         output = await self._git("status", "--porcelain", cwd=repo_dir)
@@ -200,13 +245,17 @@ class GitHubWorkflow:
 
         return self._redact(output)
 
-    async def _create_pull_request(self, branch_name: str, request_text: str, kiro_output: str) -> str:
+    async def _create_pull_request(
+        self,
+        branch_name: str,
+        pr_description: PullRequestDescription,
+    ) -> str:
         owner, repo = self._repository_owner_and_name()
         body = {
-            "title": self._pr_title(request_text),
+            "title": pr_description.title,
             "head": branch_name,
             "base": self._settings.github_base_branch,
-            "body": self._pr_body(request_text, branch_name, kiro_output),
+            "body": pr_description.body,
             "draft": False,
             "maintainer_can_modify": True,
         }
@@ -268,6 +317,53 @@ class GitHubWorkflow:
             "## Kiro Output Summary\n\n"
             f"```text\n{summary}\n```\n"
         )
+
+    def _pr_description_prompt(
+        self,
+        request_text: str,
+        git_log: str,
+        git_diff: str,
+        kiro_output: str,
+    ) -> str:
+        return (
+            "Prepare a GitHub pull request title and description for the work just completed.\n\n"
+            "Use the user's original request, the commit log, and the diff stat. Be concise, "
+            "specific, and review-oriented. Mention important behavior changes and validation "
+            "signals if they are visible. Do not invent tests or outcomes that are not present.\n\n"
+            "Return exactly this format:\n"
+            "TITLE: <one-line PR title>\n"
+            "BODY:\n"
+            "## Summary\n"
+            "- <bullet>\n\n"
+            "## Validation\n"
+            "- <bullet or 'Not run'>\n\n"
+            f"USER REQUEST:\n{request_text}\n\n"
+            f"GIT LOG:\n{self._truncate_for_prompt(git_log)}\n\n"
+            f"DIFF STAT:\n{self._truncate_for_prompt(git_diff)}\n\n"
+            f"KIRO IMPLEMENTATION OUTPUT:\n{self._truncate_for_prompt(kiro_output)}\n"
+        )
+
+    def _parse_pull_request_description(self, output: str) -> PullRequestDescription:
+        cleaned = output.strip()
+        title_match = re.search(r"^TITLE:\s*(.+)$", cleaned, flags=re.MULTILINE)
+        body_match = re.search(r"^BODY:\s*(.+)$", cleaned, flags=re.MULTILINE | re.DOTALL)
+
+        if title_match is None or body_match is None:
+            raise GitHubWorkflowError("Kiro did not return a parseable PR description.")
+
+        title = self._short_text(title_match.group(1).strip(), 120)
+        body = body_match.group(1).strip()
+        if not title or not body:
+            raise GitHubWorkflowError("Kiro returned an empty PR title or body.")
+
+        return PullRequestDescription(title=title, body=body)
+
+    def _truncate_for_prompt(self, text: str, max_length: int = 6000) -> str:
+        cleaned = text.strip()
+        if len(cleaned) <= max_length:
+            return cleaned
+
+        return f"{cleaned[:max_length]}\n...[truncated]"
 
     def _summarize_output(self, output: str) -> str:
         cleaned = output.strip()
