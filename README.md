@@ -1,6 +1,34 @@
 # Kirolets Telegram Bot
 
-A Telegram bot workspace for Kirolets.
+Kirolets lets Kiro users ask for code changes from Telegram.
+
+The long-term idea is simple: give Kiro users a lightweight interface they can use from
+wherever they already are. Telegram is the first surface. Later, the same request workflow
+can be exposed from other chat apps, webhooks, internal tools, or automation entrypoints.
+
+Kiro itself provides an agentic development experience across IDE, CLI, and web. Kirolets
+focuses on the CLI path: it turns a Telegram text message or voice note into a headless
+Kiro CLI run against a configured GitHub repository, then returns a pull request for review.
+
+## How It Uses Kiro
+
+Kiro's headless CLI mode is designed for automation contexts such as CI/CD pipelines,
+code review, test generation, and build troubleshooting. In that mode, Kiro runs without
+an interactive terminal by receiving a prompt up front:
+
+```bash
+kiro-cli chat --no-interactive "your prompt here"
+```
+
+Because there is no human sitting inside the terminal to approve tool calls, Kirolets uses
+scoped tool trust through `--trust-tools`:
+
+```bash
+kiro-cli chat --no-interactive --trust-tools=read,grep,write,bash "implement the request"
+```
+
+The Kiro API key is supplied through `KIRO_API_KEY`, matching the headless CLI
+authentication model. Keep that value in deployment secrets and never commit it.
 
 ## Requirements
 
@@ -24,13 +52,41 @@ Also configure the AWS, GitHub, and Kiro variables shown in `.env.example`.
 For each text message or voice note, the bot:
 
 1. Transcribes voice notes through S3 and Amazon Transcribe with speaker diarization enabled for up to 10 speakers.
-2. Uses text messages directly.
+2. Uses text messages directly when no transcription is needed.
 3. Clones the configured GitHub repository into a temporary workspace.
 4. Creates a new branch for the Telegram request.
 5. Runs Kiro CLI in headless mode with the message or transcript as the prompt.
 6. Commits any generated changes, pushes the branch, opens a GitHub PR, and sends the PR link back to Telegram.
 
 Long-running transcription and Kiro stages send progress updates back to the chat.
+
+## Required Configuration
+
+All runtime configuration is provided through environment variables:
+
+```env
+TELEGRAM_BOT_TOKEN=
+
+AWS_REGION=
+AWS_TRANSCRIBE_BUCKET=
+AWS_TRANSCRIBE_UPLOAD_PREFIX=telegram-voice-notes
+AWS_TRANSCRIBE_LANGUAGE_CODE=en-US
+
+GITHUB_REPOSITORY_URL=
+GITHUB_TOKEN=
+GITHUB_BASE_BRANCH=main
+
+KIRO_API_KEY=
+KIRO_TRUST_TOOLS=read,grep,write,bash
+
+PROGRESS_UPDATE_INTERVAL_SECONDS=30
+TRANSCRIBE_POLL_INTERVAL_SECONDS=5
+TRANSCRIBE_TIMEOUT_SECONDS=900
+KIRO_TIMEOUT_SECONDS=1800
+```
+
+Use narrowly scoped `KIRO_TRUST_TOOLS` values where possible. Kiro's docs recommend
+specific tool categories over trusting every tool, which matches the bot's default.
 
 ## Run
 
