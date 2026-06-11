@@ -17,6 +17,20 @@ Copy-Item .env.example .env
 ```
 
 Edit `.env` and set `TELEGRAM_BOT_TOKEN`.
+Also configure the AWS, GitHub, and Kiro variables shown in `.env.example`.
+
+## Bot Flow
+
+For each text message or voice note, the bot:
+
+1. Transcribes voice notes through S3 and Amazon Transcribe with speaker diarization enabled for up to 10 speakers.
+2. Uses text messages directly.
+3. Clones the configured GitHub repository into a temporary workspace.
+4. Creates a new branch for the Telegram request.
+5. Runs Kiro CLI in headless mode with the message or transcript as the prompt.
+6. Commits any generated changes, pushes the branch, opens a GitHub PR, and sends the PR link back to Telegram.
+
+Long-running transcription and Kiro stages send progress updates back to the chat.
 
 ## Run
 

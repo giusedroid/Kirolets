@@ -1,9 +1,9 @@
 import logging
 
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from kirolets_bot.config import load_settings
-from kirolets_bot.handlers import help_command, start
+from kirolets_bot.handlers import help_command, process_message, start
 
 
 def build_application() -> Application:
@@ -14,8 +14,10 @@ def build_application() -> Application:
     )
 
     application = Application.builder().token(settings.telegram_bot_token).build()
+    application.bot_data["settings"] = settings
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(MessageHandler(filters.TEXT | filters.VOICE, process_message))
     return application
 
 
