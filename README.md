@@ -129,6 +129,7 @@ PROGRESS_UPDATE_INTERVAL_SECONDS=30
 REDIS_URL=redis://localhost:6379/0
 REDIS_QUEUE_NAME=kirolets:jobs
 QUEUE_WORKER_CONCURRENCY=1
+YOLO=false
 TRANSCRIBE_POLL_INTERVAL_SECONDS=5
 TRANSCRIBE_TIMEOUT_SECONDS=900
 KIRO_TIMEOUT_SECONDS=1800
@@ -157,6 +158,16 @@ refs into that cache, creates a temporary linked worktree, lets Kiro edit files 
 then removes the worktree after pushing the PR branch.
 
 This keeps each request isolated while avoiding repeated full repository downloads.
+
+## YOLO Mode
+
+By default, Kirolets pushes Kiro's changes to a request branch and opens a GitHub PR.
+Set `YOLO=true` to skip PR creation and push the completed commit directly to
+`GITHUB_BASE_BRANCH`.
+
+Use this only for repositories where direct bot commits are acceptable. The GitHub token
+must have permission to push to the base branch, and branch protection rules may still
+reject the push.
 
 ## Run
 

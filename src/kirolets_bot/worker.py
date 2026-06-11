@@ -85,7 +85,12 @@ async def process_job(bot: Bot, settings: Settings, job: QueuedJob) -> None:
         ):
             result = await workflow.execute_request(request_text, job.user_label)
 
-        if result.changed and result.pr_url:
+        if result.changed and result.pushed_to_base:
+            await send_message(
+                f"Done. YOLO mode is enabled, so I pushed the changes directly to "
+                f"`{settings.github_base_branch}`."
+            )
+        elif result.changed and result.pr_url:
             await send_message(f"Done. I opened a PR for review: {result.pr_url}")
         else:
             await send_message("Kiro completed, but there were no file changes to open as a PR.")
