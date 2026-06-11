@@ -34,6 +34,7 @@ authentication model. Keep that value in deployment secrets and never commit it.
 
 - uv
 - Python 3.14
+- Redis
 - A Telegram bot token from BotFather
 
 ## Setup
@@ -83,6 +84,9 @@ KIRO_API_KEY=
 KIRO_TRUST_TOOLS=read,grep,write,bash
 
 PROGRESS_UPDATE_INTERVAL_SECONDS=30
+REDIS_URL=redis://localhost:6379/0
+REDIS_QUEUE_NAME=kirolets:jobs
+QUEUE_WORKER_CONCURRENCY=1
 TRANSCRIBE_POLL_INTERVAL_SECONDS=5
 TRANSCRIBE_TIMEOUT_SECONDS=900
 KIRO_TIMEOUT_SECONDS=1800
@@ -90,6 +94,13 @@ KIRO_TIMEOUT_SECONDS=1800
 
 Use narrowly scoped `KIRO_TRUST_TOOLS` values where possible. Kiro's docs recommend
 specific tool categories over trusting every tool, which matches the bot's default.
+
+## Queueing
+
+Telegram updates are enqueued in Redis so the bot can acknowledge messages quickly while
+Kirolets processes long-running transcription and Kiro jobs in the background. The default
+worker concurrency is `1`, which means requests are handled one at a time in FIFO order.
+Increase `QUEUE_WORKER_CONCURRENCY` later when the workflow is ready for parallel Kiro runs.
 
 ## Git Workspace Strategy
 
