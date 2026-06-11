@@ -48,6 +48,46 @@ Copy-Item .env.example .env
 Edit `.env` and set `TELEGRAM_BOT_TOKEN`.
 Also configure the AWS, GitHub, and Kiro variables shown in `.env.example`.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    user[Telegram User] --> telegram[Telegram Bot API]
+
+    telegram --> bot[kirolets-bot<br/>Telegram intake service]
+    bot --> redis[(Redis Queue<br/>kirolets:jobs)]
+
+    redis --> worker[kirolets-worker<br/>Job execution service]
+
+    worker --> telegram_file[Telegram File API<br/>voice download]
+    worker --> s3[(Amazon S3<br/>voice note storage)]
+    worker --> transcribe[Amazon Transcribe<br/>diarization, max 10 speakers]
+
+    telegram_file --> s3
+    s3 --> transcribe
+    transcribe --> worker
+
+    worker --> bare[(Bare Git Cache<br/>GIT_CACHE_DIR)]
+    bare --> worktree[Temporary Git Worktree<br/>per request branch]
+
+    worker --> kiro1[Kiro CLI Headless<br/>implementation pass]
+    kiro1 --> worktree
+
+    worktree --> git_commit[Git Commit]
+    git_commit --> kiro2[Kiro CLI Headless<br/>PR description pass]
+
+    kiro2 --> github[GitHub API<br/>push branch + create PR]
+    github --> pr[Pull Request]
+
+    worker --> telegram_reply[Telegram Bot API<br/>progress + PR link]
+    telegram_reply --> user
+```
+
+At runtime, Kirolets is one codebase with two process roles:
+
+- `kirolets-bot` receives Telegram updates and enqueues jobs.
+- `kirolets-worker` consumes Redis jobs, runs transcription/Kiro/GitHub work, and sends progress replies.
+
 ## Bot Flow
 
 For each text message or voice note, the bot:
