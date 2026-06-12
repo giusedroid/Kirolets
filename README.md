@@ -111,6 +111,7 @@ All runtime configuration is provided through environment variables:
 
 ```env
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_IDS=
 
 AWS_REGION=
 AWS_TRANSCRIBE_BUCKET=
@@ -137,6 +138,10 @@ KIRO_TIMEOUT_SECONDS=1800
 
 Use narrowly scoped `KIRO_TRUST_TOOLS` values where possible. Kiro's docs recommend
 specific tool categories over trusting every tool, which matches the bot's default.
+
+Set `TELEGRAM_ALLOWED_USER_IDS` to a comma-separated list of numeric Telegram user IDs to
+restrict who can use the bot. Leave it empty to allow any Telegram user who can message the
+bot.
 
 ## Queueing
 
