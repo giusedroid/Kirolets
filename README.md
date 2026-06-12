@@ -223,6 +223,10 @@ container usage:
 docker compose up --build
 ```
 
+## Deployment Guides
+
+- [EasyPanel installation guide](docs/easypanel-installation.md)
+
 ## Project Layout
 
 ```text
