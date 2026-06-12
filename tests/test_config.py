@@ -28,6 +28,7 @@ def test_load_settings_reads_required_token(monkeypatch):
         redis_url="redis://localhost:6379/0",
         redis_queue_name="kirolets:jobs",
         queue_worker_concurrency=1,
+        yolo=False,
         transcribe_poll_interval_seconds=5,
         transcribe_timeout_seconds=900,
         kiro_timeout_seconds=1800,

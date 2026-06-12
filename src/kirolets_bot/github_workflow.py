@@ -17,6 +17,7 @@ from kirolets_bot.config import Settings
 class PullRequestResult:
     branch_name: str
     pr_url: str | None
+    pushed_to_base: bool
     changed: bool
     summary: str
 
@@ -63,12 +64,29 @@ class GitHubWorkflow:
                     return PullRequestResult(
                         branch_name=branch_name,
                         pr_url=None,
+                        pushed_to_base=False,
                         changed=False,
                         summary=self._summarize_output(kiro_output),
                     )
 
                 await self._git("add", "-A", cwd=repo_dir)
                 await self._git("commit", "-m", self._commit_message(request_text), cwd=repo_dir)
+
+                if self._settings.yolo:
+                    await self._git_authenticated(
+                        "push",
+                        "origin",
+                        f"HEAD:{self._settings.github_base_branch}",
+                        cwd=repo_dir,
+                    )
+                    return PullRequestResult(
+                        branch_name=branch_name,
+                        pr_url=None,
+                        pushed_to_base=True,
+                        changed=True,
+                        summary=self._summarize_output(kiro_output),
+                    )
+
                 pr_description = await self._generate_pull_request_description(
                     repo_dir,
                     branch_name,
@@ -81,6 +99,7 @@ class GitHubWorkflow:
                 return PullRequestResult(
                     branch_name=branch_name,
                     pr_url=pr_url,
+                    pushed_to_base=False,
                     changed=True,
                     summary=self._summarize_output(kiro_output),
                 )

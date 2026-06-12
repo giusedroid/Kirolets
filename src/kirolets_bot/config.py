@@ -21,6 +21,7 @@ class Settings:
     redis_url: str
     redis_queue_name: str
     queue_worker_concurrency: int
+    yolo: bool
     transcribe_poll_interval_seconds: int
     transcribe_timeout_seconds: int
     kiro_timeout_seconds: int
@@ -43,6 +44,20 @@ def _int_env(name: str, default: int) -> int:
         return int(raw_value)
     except ValueError as exc:
         raise RuntimeError(f"{name} must be an integer.") from exc
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name, "").strip().lower()
+    if not raw_value:
+        return default
+
+    if raw_value in {"1", "true", "yes", "y", "on"}:
+        return True
+
+    if raw_value in {"0", "false", "no", "n", "off"}:
+        return False
+
+    raise RuntimeError(f"{name} must be a boolean.")
 
 
 def load_settings() -> Settings:
@@ -68,6 +83,7 @@ def load_settings() -> Settings:
         or "redis://localhost:6379/0",
         redis_queue_name=os.getenv("REDIS_QUEUE_NAME", "kirolets:jobs").strip() or "kirolets:jobs",
         queue_worker_concurrency=_int_env("QUEUE_WORKER_CONCURRENCY", 1),
+        yolo=_bool_env("YOLO"),
         transcribe_poll_interval_seconds=_int_env("TRANSCRIBE_POLL_INTERVAL_SECONDS", 5),
         transcribe_timeout_seconds=_int_env("TRANSCRIBE_TIMEOUT_SECONDS", 900),
         kiro_timeout_seconds=_int_env("KIRO_TIMEOUT_SECONDS", 1800),
