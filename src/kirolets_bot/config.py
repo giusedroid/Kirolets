@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class Settings:
     telegram_bot_token: str
+    telegram_allowed_user_ids: frozenset[int]
     aws_region: str
     s3_bucket: str
     s3_upload_prefix: str
@@ -60,11 +61,31 @@ def _bool_env(name: str, default: bool = False) -> bool:
     raise RuntimeError(f"{name} must be a boolean.")
 
 
+def _int_set_env(name: str) -> frozenset[int]:
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return frozenset()
+
+    values: set[int] = set()
+    for item in raw_value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+
+        try:
+            values.add(int(item))
+        except ValueError as exc:
+            raise RuntimeError(f"{name} must contain comma-separated integer IDs.") from exc
+
+    return frozenset(values)
+
+
 def load_settings() -> Settings:
     load_dotenv()
 
     return Settings(
         telegram_bot_token=_required_env("TELEGRAM_BOT_TOKEN"),
+        telegram_allowed_user_ids=_int_set_env("TELEGRAM_ALLOWED_USER_IDS"),
         aws_region=_required_env("AWS_REGION"),
         s3_bucket=_required_env("AWS_TRANSCRIBE_BUCKET"),
         s3_upload_prefix=os.getenv("AWS_TRANSCRIBE_UPLOAD_PREFIX", "telegram-voice-notes").strip()

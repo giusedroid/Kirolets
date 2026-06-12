@@ -5,6 +5,7 @@ from kirolets_bot.config import Settings, load_settings
 
 def test_load_settings_reads_required_token(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token-123")
+    monkeypatch.setenv("TELEGRAM_ALLOWED_USER_IDS", "123, 456")
     monkeypatch.setenv("AWS_REGION", "eu-west-1")
     monkeypatch.setenv("AWS_TRANSCRIBE_BUCKET", "bucket")
     monkeypatch.setenv("GITHUB_REPOSITORY_URL", "https://github.com/example/repo.git")
@@ -14,6 +15,7 @@ def test_load_settings_reads_required_token(monkeypatch):
 
     assert load_settings() == Settings(
         telegram_bot_token="token-123",
+        telegram_allowed_user_ids=frozenset({123, 456}),
         aws_region="eu-west-1",
         s3_bucket="bucket",
         s3_upload_prefix="telegram-voice-notes",
