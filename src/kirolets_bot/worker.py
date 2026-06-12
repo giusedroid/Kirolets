@@ -85,6 +85,8 @@ async def process_job(bot: Bot, settings: Settings, job: QueuedJob) -> None:
         ):
             result = await workflow.execute_request(request_text, job.user_label)
 
+        await send_message(_kiro_response_message(result.summary))
+
         if result.changed and result.pushed_to_base:
             await send_message(
                 f"Done. YOLO mode is enabled, so I pushed the changes directly to "
@@ -96,6 +98,15 @@ async def process_job(bot: Bot, settings: Settings, job: QueuedJob) -> None:
             await send_message("Kiro completed, but there were no file changes to open as a PR.")
     except (GitHubWorkflowError, TranscriptionFailedError, TranscriptionTimedOutError) as exc:
         await send_message(f"I could not complete the request: {exc}")
+
+
+def _kiro_response_message(summary: str) -> str:
+    response = summary.strip() or "Kiro finished without returning a response."
+    max_length = 3500
+    if len(response) > max_length:
+        response = f"{response[:max_length].rstrip()}\n...[truncated]"
+
+    return f"Kiro response:\n\n{response}"
 
 
 async def _job_to_request_text(
