@@ -120,6 +120,8 @@ AWS_TRANSCRIBE_LANGUAGE_CODE=en-US
 
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=.kirolets/git-cache
 
@@ -142,6 +144,10 @@ specific tool categories over trusting every tool, which matches the bot's defau
 Set `TELEGRAM_ALLOWED_USER_IDS` to a comma-separated list of numeric Telegram user IDs to
 restrict who can use the bot. Leave it empty to allow any Telegram user who can message the
 bot.
+
+`GITHUB_USERNAME` and `GITHUB_EMAIL` are used as the Git commit identity inside temporary
+worktrees. Set them to a real GitHub username and email, or a GitHub no-reply email, so
+`git commit` works inside containers.
 
 ## Queueing
 

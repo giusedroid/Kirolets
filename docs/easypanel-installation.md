@@ -93,6 +93,8 @@ Minimum AWS permissions for the worker:
 ```env
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=.kirolets/git-cache
 ```
@@ -117,6 +119,10 @@ For a GitHub fine-grained personal access token, start with:
 - Metadata: read.
 
 Branch protection can still block `YOLO=true` pushes, even when the token has write access.
+
+`GITHUB_USERNAME` and `GITHUB_EMAIL` are configured as `git config user.name` and
+`git config user.email` inside each temporary worktree before committing. Without them,
+containerized commits can fail with Git's author identity error.
 
 ### Kiro
 
@@ -232,6 +238,8 @@ AWS_TRANSCRIBE_LANGUAGE_CODE=en-US
 
 GITHUB_REPOSITORY_URL=
 GITHUB_TOKEN=
+GITHUB_USERNAME=
+GITHUB_EMAIL=
 GITHUB_BASE_BRANCH=main
 GIT_CACHE_DIR=.kirolets/git-cache
 

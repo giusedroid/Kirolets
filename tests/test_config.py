@@ -10,6 +10,8 @@ def test_load_settings_reads_required_token(monkeypatch):
     monkeypatch.setenv("AWS_TRANSCRIBE_BUCKET", "bucket")
     monkeypatch.setenv("GITHUB_REPOSITORY_URL", "https://github.com/example/repo.git")
     monkeypatch.setenv("GITHUB_TOKEN", "github-token")
+    monkeypatch.setenv("GITHUB_USERNAME", "octocat")
+    monkeypatch.setenv("GITHUB_EMAIL", "octocat@example.com")
     monkeypatch.setenv("KIRO_API_KEY", "kiro-token")
     monkeypatch.setenv("LOG_LEVEL", "debug")
 
@@ -22,6 +24,8 @@ def test_load_settings_reads_required_token(monkeypatch):
         transcribe_language_code="en-US",
         github_repository_url="https://github.com/example/repo.git",
         github_token="github-token",
+        github_username="octocat",
+        github_email="octocat@example.com",
         github_base_branch="main",
         git_cache_dir=".kirolets/git-cache",
         kiro_api_key="kiro-token",
